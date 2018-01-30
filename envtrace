@@ -1,0 +1,7 @@
+#!/bin/sh
+
+export LD_PRELOAD=$PWD/envtrace-helper.so
+export ENVTRACE_LOGFILE=$PWD/env.trace
+exec "$@"
+
+exit 1
