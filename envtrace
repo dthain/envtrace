@@ -1,7 +1,12 @@
 #!/bin/sh
 
-export LD_PRELOAD=$PWD/envtrace-helper.so
-export ENVTRACE_LOGFILE=$PWD/env.trace
+ENVTRACE_ROOT="$(readlink -f $(dirname "$0"))"
+
+export LD_PRELOAD=${ENVTRACE_ROOT}/envtrace-helper.so
+export ENVTRACE_LOGFILE=${ENVTRACE_ROOT}/env.trace
+
+echo "Writing ENVTRACE to: ${ENVTRACE_LOGFILE}"
+
 exec "$@"
 
 exit 1
