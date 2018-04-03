@@ -1,4 +1,11 @@
+#if defined(__linux__) && !defined(_GNU_SOURCE)
 #define _GNU_SOURCE
+#endif
+
+#if !defined(RTLD_NEXT)
+#define RTLD_NEXT 0
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <dlfcn.h>
