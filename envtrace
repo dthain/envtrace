@@ -2,7 +2,7 @@
 
 ENVTRACE_ROOT="$(readlink -f $(dirname "$0"))"
 
-export LD_PRELOAD=${ENVTRACE_ROOT}/envtrace-helper.so
+export LD_PRELOAD=${ENVTRACE_ROOT}/envtrace-helper.so:/lib64/libdl.so:${LD_PRELOAD}
 export ENVTRACE_LOGFILE=${ENVTRACE_ROOT}/env.trace
 
 echo "Writing ENVTRACE to: ${ENVTRACE_LOGFILE}"
