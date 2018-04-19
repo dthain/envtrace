@@ -1,7 +1,10 @@
 #define _GNU_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include <dlfcn.h>
+#include <time.h>
 #include <errno.h>
 #include <string.h>
 
@@ -39,10 +42,15 @@ char * getenv( const char *name )
 
 	char *result = real_getenv(name);
 
+	pid_t pid = getpid();
+	pid_t ppid = getppid();
+	struct timeval timestamp;
+    	gettimeofday(&timestamp, NULL);
+
 	if(result) {	
-		fprintf(logfile,"%s %s HIT %s\n",program_invocation_name,name,result);
+		fprintf(logfile,"%ld: %ld %ld %s %s HIT %s\n",(long)timestamp.tv_sec,(long)ppid,(long)pid,program_invocation_name,name,result);
 	} else {
-		fprintf(logfile,"%s %s MISS\n",program_invocation_name,name);
+		fprintf(logfile,"%ld: %ld %ld %s %s MISS\n",(long)timestamp.tv_sec,(long)ppid,(long)pid,program_invocation_name,name);
 	}
 	fflush(logfile);
 
