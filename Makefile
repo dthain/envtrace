@@ -1,5 +1,5 @@
 envtrace-helper.so: envtrace-helper.c
-	gcc -fPIC -shared $< -o $@
+	gcc -fPIC -Wall -shared $< -o $@
 
 clean:
 	rm -f envtrace-helper.so
