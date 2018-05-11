@@ -7,7 +7,7 @@ export ENVTRACE_LOGFILE=${ENVTRACE_ROOT}/env.trace
 
 echo "Writing ENVTRACE to: ${ENVTRACE_LOGFILE}"
 
-printenv > ${ENVTRACE_LOGFILE}
+printenv >> ${ENVTRACE_LOGFILE}
 
 exec "$@"
 

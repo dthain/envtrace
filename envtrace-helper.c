@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/types.h>
@@ -19,6 +20,8 @@ static int (*real_setenv) ( const char *name,const char *value,int overwrite ) =
 static int (*real_unsetenv) ( const char *name ) = 0;
 static pid_t (*real_fork) ( ) = 0;
 static int (*real_clone) ( int (*fn)(void *),void *child_stack,int flags,void *arg,... ) = 0;
+static int (*real_open) ( const char *pathname,int flags,... ) = 0;
+static int (*real_creat) ( const char *pathname,mode_t mode ) = 0;
 
 char * getenv( const char *name )
 {
@@ -214,4 +217,86 @@ int clone( int (*fn)(void *),void *child_stack,int flags,void *arg,.../* pid_t *
 	fflush(logfile);
 
 	return result;
+}
+
+
+int open( const char *pathname,int flags,... )
+{
+	if(!real_open) {
+		real_open = dlsym(RTLD_NEXT,"open");
+		if(!real_open) {
+			fprintf(stderr,"envtrace-helper: couldn't find original open()\n");
+			exit(1);
+		}
+	}
+
+	if(!logfile_name) {
+		logfile_name = getenv("ENVTRACE_LOGFILE");
+		if(!logfile_name) {
+			fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
+			exit(1);
+		}
+	}
+
+        if(!logfile) {
+                logfile = fopen(logfile_name,"a");
+                if(!logfile) {
+                        fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
+                        exit(1);
+                }
+	}
+
+	va_list ap;
+	int mode;
+	va_start(ap, flags);
+	mode = va_arg(ap, int);
+	va_end(ap);
+
+	int result = real_open(pathname,flags,mode);
+	pid_t pid = getpid();
+	pid_t ppid = getppid();
+	struct timeval timestamp;
+	gettimeofday(&timestamp,NULL);
+	fprintf(logfile,"%ld: OPEN %ld %ld %s %d\n",(long)timestamp.tv_sec,(long)ppid,(long)pid,program_invocation_name,result);
+	fflush(logfile);
+
+	return result;
+}
+
+int creat( const char *pathname,mode_t mode )
+{
+        if(!real_creat) {
+                real_creat = dlsym(RTLD_NEXT,"creat");
+                if(!real_creat) {
+                        fprintf(stderr,"envtrace-helper: couldn't find original creat()\n");
+                        exit(1);
+                }
+        }
+
+        if(!logfile_name) {
+                logfile_name = getenv("ENVTRACE_LOGFILE");
+                if(!logfile_name) {
+                        fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
+                        exit(1);
+                }
+        }
+
+        if(!logfile) {
+                logfile = fopen(logfile_name,"a");
+                if(!logfile) {
+                        fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
+                        exit(1);
+                }
+        }
+
+        int result = real_creat(pathname,mode);
+        pid_t pid = getpid();
+        pid_t ppid = getppid();
+        struct timeval timestamp;
+        gettimeofday(&timestamp,NULL);
+        fprintf(logfile,"%ld: CREAT %ld %ld %s %d\n",(long)timestamp.tv_sec,(long)ppid,(long)pid,program_invocation_name,result);
+        fflush(logfile);
+
+        return result;
+
 }
