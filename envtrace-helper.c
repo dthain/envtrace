@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <dlfcn.h>
 #include <time.h>
+#include <limits.h>
 #include <sys/time.h>
 #include <errno.h>
 #include <string.h>
@@ -41,32 +42,36 @@ char * getenv( const char *name )
 		}
 	}
 
+    if(!logfile) {
+        logfile = fopen(logfile_name,"a");
         if(!logfile) {
-                logfile = fopen(logfile_name,"a");
-                if(!logfile) {
-                        fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-                        exit(1);
-                }
+            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
+            exit(1);
+        }
 	}
 
 	char *result = real_getenv(name);
 
 	pid_t pid = getpid();
 	pid_t ppid = getppid();
-	struct timeval timestamp;
-    	gettimeofday(&timestamp,NULL);
+	struct timespec timestamp;
+	clock_gettime(CLOCK_REALTIME,&timestamp);
+	char *user = real_getenv("USER");
+	char *hostname = malloc(sizeof(INT_MAX));
+	size_t hostsize = INT_MAX;
+	gethostname(hostname,hostsize);
 
 	if(result) {	
-		fprintf(logfile,"%ld: %ld %ld %s %s HIT %s\n",(long)timestamp.tv_sec,(long)ppid,(long)pid,program_invocation_name,name,result);
+		fprintf(logfile,"%s@%s %ld.%ld: GETENV %ld %ld %s %s HIT %s\n",user,hostname,(long)timestamp.tv_sec,timestamp.tv_nsec,(long)ppid,(long)pid,program_invocation_name,name,result);
 	} else {
-		fprintf(logfile,"%ld: %ld %ld %s %s MISS\n",(long)timestamp.tv_sec,(long)ppid,(long)pid,program_invocation_name,name);
+		fprintf(logfile,"%s@%s %ld.%ld: GETENV %ld %ld %s %s MISS\n",user,hostname,(long)timestamp.tv_sec,timestamp.tv_nsec,(long)ppid,(long)pid,program_invocation_name,name);
 	}
 	fflush(logfile);
 
 	return result;
 }
 
-int setenv(const char *name, const char *value, int overwrite)
+int setenv( const char *name,const char *value,int overwrite )
 {
 	if(!real_setenv) {
 		real_setenv = dlsym(RTLD_NEXT,"setenv");
@@ -84,29 +89,34 @@ int setenv(const char *name, const char *value, int overwrite)
 		}
 	}
 
+    if(!logfile) {
+        logfile = fopen(logfile_name,"a");
         if(!logfile) {
-                logfile = fopen(logfile_name,"a");
-                if(!logfile) {
-                        fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-                        exit(1);
-                }
+            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
+            exit(1);
+        }
 	}
 
+	const char *prev_val = getenv(name);
 	int result = real_setenv(name,value,overwrite);
 
 	pid_t pid = getpid();
 	pid_t ppid = getppid();
-	struct timeval timestamp;
-    	gettimeofday(&timestamp,NULL);
+	struct timespec timestamp;
+	clock_gettime(CLOCK_REALTIME,&timestamp);
+	char *user = getenv("USER");
+	char *hostname = malloc(sizeof(INT_MAX));
+	size_t hostsize = INT_MAX;
+	gethostname(hostname,hostsize);
 
-	fprintf(logfile,"%ld: SETENV %ld %ld %s %s %s %d\n",(long)timestamp.tv_sec,(long)ppid,(long)pid,program_invocation_name,name,value,result);
+	fprintf(logfile,"%s@%s %ld.%ld: SETENV %ld %ld %s %s %s %s %d\n",user,hostname,(long)timestamp.tv_sec,timestamp.tv_nsec,(long)ppid,(long)pid,program_invocation_name,name,prev_val,value,result);
 	fflush(logfile);
 
 	return result;
 
 }
 
-int unsetenv(const char *name)
+int unsetenv( const char *name )
 {
 	if(!real_unsetenv) {
 		real_unsetenv = dlsym(RTLD_NEXT,"unsetenv");
@@ -124,21 +134,27 @@ int unsetenv(const char *name)
 		}
 	}
 
+    if(!logfile) {
+        logfile = fopen(logfile_name,"a");
         if(!logfile) {
-                logfile = fopen(logfile_name,"a");
-                if(!logfile) {
-                        fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-                        exit(1);
-                }
+            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
+            exit(1);
+        }
 	}
 
+	const char *prev_val = getenv(name);
 	int result = real_unsetenv(name);
 
 	pid_t pid = getpid();
 	pid_t ppid = getppid();
-	struct timeval timestamp;
-    	gettimeofday(&timestamp,NULL);
-	fprintf(logfile,"%ld: UNSET %ld %ld %s %s %d\n",(long)timestamp.tv_sec,(long)ppid,(long)pid,program_invocation_name,name,result);
+	struct timespec timestamp;
+	clock_gettime(CLOCK_REALTIME,&timestamp);
+	char *user = getenv("USER");
+	char *hostname = malloc(sizeof(INT_MAX));
+	size_t hostsize = INT_MAX;
+	gethostname(hostname,hostsize);
+
+	fprintf(logfile,"%s@%s %ld.%ld: UNSET %ld %ld %s %s %s %d\n",user,hostname,(long)timestamp.tv_sec,timestamp.tv_nsec,(long)ppid,(long)pid,program_invocation_name,name,prev_val,result);
 	fflush(logfile);
 
 	return result;
@@ -163,20 +179,25 @@ pid_t fork()
 		}
 	}
 
+    if(!logfile) {
+        logfile = fopen(logfile_name,"a");
         if(!logfile) {
-                logfile = fopen(logfile_name,"a");
-                if(!logfile) {
-                        fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-                        exit(1);
-                }
+            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
+            exit(1);
+        }
 	}
 	
 	pid_t result = real_fork();
 	pid_t pid = getpid();
 	pid_t ppid = getppid();
-	struct timeval timestamp;
-    	gettimeofday(&timestamp,NULL);
-	fprintf(logfile,"%ld: FORK %ld %ld %s %"PRId64"\n",(long)timestamp.tv_sec,(long)ppid,(long)pid,program_invocation_name,(int64_t) result);
+	struct timespec timestamp;
+	clock_gettime(CLOCK_REALTIME,&timestamp);
+	char *user = getenv("USER");
+	char *hostname = malloc(1024);
+	size_t hostsize = 1024;
+	gethostname(hostname,hostsize);
+
+	fprintf(logfile,"%s@%s %ld.%ld: FORK %ld %ld %s %"PRId64"\n",user,hostname,(long)timestamp.tv_sec,timestamp.tv_nsec,(long)ppid,(long)pid,program_invocation_name,(int64_t) result);
 	fflush(logfile);
 
 	return result;
@@ -200,25 +221,29 @@ int clone( int (*fn)(void *),void *child_stack,int flags,void *arg,.../* pid_t *
 		}
 	}
 
+    if(!logfile) {
+        logfile = fopen(logfile_name,"a");
         if(!logfile) {
-                logfile = fopen(logfile_name,"a");
-                if(!logfile) {
-                        fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-                        exit(1);
-                }
+            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
+            exit(1);
+        }
 	}
 	
 	int result = real_clone(fn,child_stack,flags,arg);
 	pid_t pid = getpid();
 	pid_t ppid = getppid();
-	struct timeval timestamp;
-    	gettimeofday(&timestamp,NULL);
-	fprintf(logfile,"%ld: CLONE %ld %ld %s %d\n",(long)timestamp.tv_sec,(long)ppid,(long)pid,program_invocation_name,result);
+	struct timespec timestamp;
+	clock_gettime(CLOCK_REALTIME,&timestamp);
+	char *user = getenv("USER");
+	char *hostname = malloc(sizeof(INT_MAX));
+	size_t hostsize = INT_MAX;
+	gethostname(hostname,hostsize);
+
+	fprintf(logfile,"%s@%s %ld.%ld: CLONE %ld %ld %s %d\n",user,hostname,(long)timestamp.tv_sec,timestamp.tv_nsec,(long)ppid,(long)pid,program_invocation_name,result);
 	fflush(logfile);
 
 	return result;
 }
-
 
 int open( const char *pathname,int flags,... )
 {
@@ -238,12 +263,12 @@ int open( const char *pathname,int flags,... )
 		}
 	}
 
+    if(!logfile) {
+        logfile = fopen(logfile_name,"a");
         if(!logfile) {
-                logfile = fopen(logfile_name,"a");
-                if(!logfile) {
-                        fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-                        exit(1);
-                }
+            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
+            exit(1);
+        }
 	}
 
 	va_list ap;
@@ -255,9 +280,14 @@ int open( const char *pathname,int flags,... )
 	int result = real_open(pathname,flags,mode);
 	pid_t pid = getpid();
 	pid_t ppid = getppid();
-	struct timeval timestamp;
-	gettimeofday(&timestamp,NULL);
-	fprintf(logfile,"%ld: OPEN %ld %ld %s %d\n",(long)timestamp.tv_sec,(long)ppid,(long)pid,program_invocation_name,result);
+	struct timespec timestamp;
+	clock_gettime(CLOCK_REALTIME,&timestamp);
+	char *user = getenv("USER");
+	char *hostname = malloc(sizeof(INT_MAX));
+	size_t hostsize = INT_MAX;
+	gethostname(hostname,hostsize);
+
+	fprintf(logfile,"%s@%s %ld.%ld: OPEN %ld %ld %s %s %d\n",user,hostname,(long)timestamp.tv_sec,timestamp.tv_nsec,(long)ppid,(long)pid,program_invocation_name,pathname,result);
 	fflush(logfile);
 
 	return result;
@@ -265,38 +295,43 @@ int open( const char *pathname,int flags,... )
 
 int creat( const char *pathname,mode_t mode )
 {
+    if(!real_creat) {
+        real_creat = dlsym(RTLD_NEXT,"creat");
         if(!real_creat) {
-                real_creat = dlsym(RTLD_NEXT,"creat");
-                if(!real_creat) {
-                        fprintf(stderr,"envtrace-helper: couldn't find original creat()\n");
-                        exit(1);
-                }
+                fprintf(stderr,"envtrace-helper: couldn't find original creat()\n");
+                exit(1);
         }
+    }
 
+    if(!logfile_name) {
+        logfile_name = getenv("ENVTRACE_LOGFILE");
         if(!logfile_name) {
-                logfile_name = getenv("ENVTRACE_LOGFILE");
-                if(!logfile_name) {
-                        fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
-                        exit(1);
-                }
+            fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
+            exit(1);
         }
+    }
 
+    if(!logfile) {
+        logfile = fopen(logfile_name,"a");
         if(!logfile) {
-                logfile = fopen(logfile_name,"a");
-                if(!logfile) {
-                        fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-                        exit(1);
-                }
+            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
+            exit(1);
         }
+    }
 
-        int result = real_creat(pathname,mode);
-        pid_t pid = getpid();
-        pid_t ppid = getppid();
-        struct timeval timestamp;
-        gettimeofday(&timestamp,NULL);
-        fprintf(logfile,"%ld: CREAT %ld %ld %s %d\n",(long)timestamp.tv_sec,(long)ppid,(long)pid,program_invocation_name,result);
-        fflush(logfile);
+    int result = real_creat(pathname,mode);
+    pid_t pid = getpid();
+    pid_t ppid = getppid();
+    struct timespec timestamp;
+    clock_gettime(CLOCK_REALTIME,&timestamp);
+    char *user = getenv("USER");
+    char *hostname = malloc(sizeof(INT_MAX));
+    size_t hostsize = INT_MAX;
+    gethostname(hostname,hostsize);
 
-        return result;
+    fprintf(logfile,"%s@%s %ld.%ld: CREAT %ld %ld %s %s %d\n",user,hostname,(long)timestamp.tv_sec,timestamp.tv_nsec,(long)ppid,(long)pid,program_invocation_name,pathname,result);
+    fflush(logfile);
+    
+    return result;
 
 }
