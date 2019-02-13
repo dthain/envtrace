@@ -33,17 +33,9 @@ static int (*real_execvp) ( const char *file,char *const argv[] ) = 0;
 static int (*real_execlp) ( const char *file,const char *arg0,... ) = 0;
 static int (*real_execvpe) ( const char *file,char *const argv[],char *const envp[] ) = 0;
 
-char * getenv( const char *name )
+void logfile_check()
 {
-	if(!real_getenv) {
-		real_getenv = dlsym(RTLD_NEXT,"getenv");
-		if(!real_getenv) {
-			fprintf(stderr,"envtrace-helper: couldn't find original getenv().\n");
-			exit(1);
-		}
-	}
-
-	if(!logfile_name) {
+ 	if(!logfile_name) {
 		logfile_name = real_getenv("ENVTRACE_LOGFILE");
 		if(!logfile_name) {
 			fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
@@ -58,6 +50,19 @@ char * getenv( const char *name )
             exit(1);
         }
 	}
+}
+
+char * getenv( const char *name )
+{
+	if(!real_getenv) {
+		real_getenv = dlsym(RTLD_NEXT,"getenv");
+		if(!real_getenv) {
+			fprintf(stderr,"envtrace-helper: couldn't find original getenv().\n");
+			exit(1);
+		}
+	}
+
+	logfile_check();
 
 	char *result = real_getenv(name);
 
@@ -90,21 +95,7 @@ int setenv( const char *name,const char *value,int overwrite )
 		}
 	}
 
-	if(!logfile_name) {
-		logfile_name = getenv("ENVTRACE_LOGFILE");
-		if(!logfile_name) {
-			fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
-			exit(1);
-		}
-	}
-
-    if(!logfile) {
-        logfile = fopen(logfile_name,"a");
-        if(!logfile) {
-            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-            exit(1);
-        }
-	}
+    logfile_check();
 
 	const char *prev_val = getenv(name);
 	int result = real_setenv(name,value,overwrite);
@@ -113,7 +104,7 @@ int setenv( const char *name,const char *value,int overwrite )
 	pid_t ppid = getppid();
 	struct timespec timestamp;
 	clock_gettime(CLOCK_REALTIME,&timestamp);
-	char *user = getenv("USER");
+	char *user = real_getenv("USER");
 	char *hostname = malloc(sizeof(INT_MAX));
 	size_t hostsize = INT_MAX;
 	gethostname(hostname,hostsize);
@@ -135,21 +126,7 @@ int unsetenv( const char *name )
 		}
 	}
 
-	if(!logfile_name) {
-		logfile_name = getenv("ENVTRACE_LOGFILE");
-		if(!logfile_name) {
-			fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
-			exit(1);
-		}
-	}
-
-    if(!logfile) {
-        logfile = fopen(logfile_name,"a");
-        if(!logfile) {
-            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-            exit(1);
-        }
-	}
+    logfile_check();
 
 	const char *prev_val = getenv(name);
 	int result = real_unsetenv(name);
@@ -158,7 +135,7 @@ int unsetenv( const char *name )
 	pid_t ppid = getppid();
 	struct timespec timestamp;
 	clock_gettime(CLOCK_REALTIME,&timestamp);
-	char *user = getenv("USER");
+	char *user = real_getenv("USER");
 	char *hostname = malloc(sizeof(INT_MAX));
 	size_t hostsize = INT_MAX;
 	gethostname(hostname,hostsize);
@@ -180,28 +157,14 @@ pid_t fork()
 		}
 	}
 
-	if(!logfile_name) {
-		logfile_name = getenv("ENVTRACE_LOGFILE");
-		if(!logfile_name) {
-			fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
-			exit(1);
-		}
-	}
+    logfile_check();
 
-    if(!logfile) {
-        logfile = fopen(logfile_name,"a");
-        if(!logfile) {
-            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-            exit(1);
-        }
-	}
-	
 	pid_t result = real_fork();
 	pid_t pid = getpid();
 	pid_t ppid = getppid();
 	struct timespec timestamp;
 	clock_gettime(CLOCK_REALTIME,&timestamp);
-	char *user = getenv("USER");
+	char *user = real_getenv("USER");
 	char *hostname = malloc(1024);
 	size_t hostsize = 1024;
 	gethostname(hostname,hostsize);
@@ -222,28 +185,14 @@ int clone( int (*fn)(void *),void *child_stack,int flags,void *arg,.../* pid_t *
 		}
 	}
 
-	if(!logfile_name) {
-		logfile_name = getenv("ENVTRACE_LOGFILE");
-		if(!logfile_name) {
-			fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
-			exit(1);
-		}
-	}
+    logfile_check();
 
-    if(!logfile) {
-        logfile = fopen(logfile_name,"a");
-        if(!logfile) {
-            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-            exit(1);
-        }
-	}
-	
 	int result = real_clone(fn,child_stack,flags,arg);
 	pid_t pid = getpid();
 	pid_t ppid = getppid();
 	struct timespec timestamp;
 	clock_gettime(CLOCK_REALTIME,&timestamp);
-	char *user = getenv("USER");
+	char *user = real_getenv("USER");
 	char *hostname = malloc(sizeof(INT_MAX));
 	size_t hostsize = INT_MAX;
 	gethostname(hostname,hostsize);
@@ -264,21 +213,7 @@ int open( const char *pathname,int flags,... )
 		}
 	}
 
-	if(!logfile_name) {
-		logfile_name = getenv("ENVTRACE_LOGFILE");
-		if(!logfile_name) {
-			fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
-			exit(1);
-		}
-	}
-
-    if(!logfile) {
-        logfile = fopen(logfile_name,"a");
-        if(!logfile) {
-            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-            exit(1);
-        }
-	}
+    logfile_check();
 
 	va_list ap;
 	int mode;
@@ -291,7 +226,7 @@ int open( const char *pathname,int flags,... )
 	pid_t ppid = getppid();
 	struct timespec timestamp;
 	clock_gettime(CLOCK_REALTIME,&timestamp);
-	char *user = getenv("USER");
+	char *user = real_getenv("USER");
 	char *hostname = malloc(sizeof(INT_MAX));
 	size_t hostsize = INT_MAX;
 	gethostname(hostname,hostsize);
@@ -312,21 +247,7 @@ int openat ( int dirfd, const char *pathname, int flags,... )
 		}
 	}
 
-	if(!logfile_name) {
-		logfile_name = getenv("ENVTRACE_LOGFILE");
-		if(!logfile_name) {
-			fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
-			exit(1);
-		}
-	}
-
-    if(!logfile) {
-        logfile = fopen(logfile_name,"a");
-        if(!logfile) {
-            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-            exit(1);
-        }
-	}
+    logfile_check();
 
 	va_list ap;
 	int mode;
@@ -339,7 +260,7 @@ int openat ( int dirfd, const char *pathname, int flags,... )
 	pid_t ppid = getppid();
 	struct timespec timestamp;
 	clock_gettime(CLOCK_REALTIME,&timestamp);
-	char *user = getenv("USER");
+	char *user = real_getenv("USER");
 	char *hostname = malloc(sizeof(INT_MAX));
 	size_t hostsize = INT_MAX;
 	gethostname(hostname,hostsize);
@@ -360,28 +281,14 @@ int creat( const char *pathname,mode_t mode )
         }
     }
 
-    if(!logfile_name) {
-        logfile_name = getenv("ENVTRACE_LOGFILE");
-        if(!logfile_name) {
-            fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
-            exit(1);
-        }
-    }
-
-    if(!logfile) {
-        logfile = fopen(logfile_name,"a");
-        if(!logfile) {
-            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-            exit(1);
-        }
-    }
+    logfile_check();
 
     int result = real_creat(pathname,mode);
     pid_t pid = getpid();
     pid_t ppid = getppid();
     struct timespec timestamp;
     clock_gettime(CLOCK_REALTIME,&timestamp);
-    char *user = getenv("USER");
+    char *user = real_getenv("USER");
     char *hostname = malloc(sizeof(INT_MAX));
     size_t hostsize = INT_MAX;
     gethostname(hostname,hostsize);
@@ -402,28 +309,14 @@ int execv ( const char *path,char *const argv[] )
         }
     }
 
-    if(!logfile_name) {
-        logfile_name = getenv("ENVTRACE_LOGFILE");
-        if(!logfile_name) {
-            fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
-            exit(1);
-        }
-    }
-
-    if(!logfile) {
-        logfile = fopen(logfile_name,"a");
-        if(!logfile) {
-            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-            exit(1);
-        }
-    }
+    logfile_check();
 
     int result = real_execv(path,argv);
     pid_t pid = getpid();
     pid_t ppid = getppid();
     struct timespec timestamp;
     clock_gettime(CLOCK_REALTIME,&timestamp);
-    char *user = getenv("USER");
+    char *user = real_getenv("USER");
     char *hostname = malloc(sizeof(INT_MAX));
     size_t hostsize = INT_MAX;
     gethostname(hostname,hostsize);
@@ -444,21 +337,7 @@ int execl ( const char *path,const char *arg0,... )
         }
     }
 
-    if(!logfile_name) {
-        logfile_name = getenv("ENVTRACE_LOGFILE");
-        if(!logfile_name) {
-            fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
-            exit(1);
-        }
-    }
-
-    if(!logfile) {
-        logfile = fopen(logfile_name,"a");
-        if(!logfile) {
-            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-            exit(1);
-        }
-    }
+    logfile_check();
 
     ptrdiff_t argc;
     va_list ap;
@@ -496,7 +375,7 @@ int execl ( const char *path,const char *arg0,... )
     pid_t ppid = getppid();
     struct timespec timestamp;
     clock_gettime(CLOCK_REALTIME,&timestamp);
-    char *user = getenv("USER");
+    char *user = real_getenv("USER");
     char *hostname = malloc(sizeof(INT_MAX));
     size_t hostsize = INT_MAX;
     gethostname(hostname,hostsize);
@@ -517,28 +396,14 @@ int execve ( const char *path,char *const argv[],char *const envp[] )
         }
     }
 
-    if(!logfile_name) {
-        logfile_name = getenv("ENVTRACE_LOGFILE");
-        if(!logfile_name) {
-            fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
-            exit(1);
-        }
-    }
-
-    if(!logfile) {
-        logfile = fopen(logfile_name,"a");
-        if(!logfile) {
-            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-            exit(1);
-        }
-    }
+    logfile_check();
 
     int result = real_execve(path,argv,envp);
     pid_t pid = getpid();
     pid_t ppid = getppid();
     struct timespec timestamp;
     clock_gettime(CLOCK_REALTIME,&timestamp);
-    char *user = getenv("USER");
+    char *user = real_getenv("USER");
     char *hostname = malloc(sizeof(INT_MAX));
     size_t hostsize = INT_MAX;
     gethostname(hostname,hostsize);
@@ -559,21 +424,7 @@ int execle ( const char *path,const char *arg0,... )
         }
     }
 
-    if(!logfile_name) {
-        logfile_name = getenv("ENVTRACE_LOGFILE");
-        if(!logfile_name) {
-            fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
-            exit(1);
-        }
-    }
-
-    if(!logfile) {
-        logfile = fopen(logfile_name,"a");
-        if(!logfile) {
-            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-            exit(1);
-        }
-    }
+    logfile_check();
 
     ptrdiff_t argc;
     va_list ap;
@@ -613,7 +464,7 @@ int execle ( const char *path,const char *arg0,... )
     pid_t ppid = getppid();
     struct timespec timestamp;
     clock_gettime(CLOCK_REALTIME,&timestamp);
-    char *user = getenv("USER");
+    char *user = real_getenv("USER");
     char *hostname = malloc(sizeof(INT_MAX));
     size_t hostsize = INT_MAX;
     gethostname(hostname,hostsize);
@@ -634,28 +485,14 @@ int execvp ( const char *file,char *const argv[] )
         }
     }
 
-    if(!logfile_name) {
-        logfile_name = getenv("ENVTRACE_LOGFILE");
-        if(!logfile_name) {
-            fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
-            exit(1);
-        }
-    }
-
-    if(!logfile) {
-        logfile = fopen(logfile_name,"a");
-        if(!logfile) {
-            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-            exit(1);
-        }
-    }
+    logfile_check();
 
     int result = real_execvp(file,argv);
     pid_t pid = getpid();
     pid_t ppid = getppid();
     struct timespec timestamp;
     clock_gettime(CLOCK_REALTIME,&timestamp);
-    char *user = getenv("USER");
+    char *user = real_getenv("USER");
     char *hostname = malloc(sizeof(INT_MAX));
     size_t hostsize = INT_MAX;
     gethostname(hostname,hostsize);
@@ -676,21 +513,7 @@ int execlp ( const char *file,const char *arg0,... )
         }
     }
 
-    if(!logfile_name) {
-        logfile_name = getenv("ENVTRACE_LOGFILE");
-        if(!logfile_name) {
-            fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
-            exit(1);
-        }
-    }
-
-    if(!logfile) {
-        logfile = fopen(logfile_name,"a");
-        if(!logfile) {
-            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-            exit(1);
-        }
-    }
+    logfile_check();
 
     ptrdiff_t argc;
     va_list ap;
@@ -728,7 +551,7 @@ int execlp ( const char *file,const char *arg0,... )
     pid_t ppid = getppid();
     struct timespec timestamp;
     clock_gettime(CLOCK_REALTIME,&timestamp);
-    char *user = getenv("USER");
+    char *user = real_getenv("USER");
     char *hostname = malloc(sizeof(INT_MAX));
     size_t hostsize = INT_MAX;
     gethostname(hostname,hostsize);
@@ -749,28 +572,14 @@ int execvpe ( const char *file,char *const argv[],char *const envp[] )
         }
     }
 
-    if(!logfile_name) {
-        logfile_name = getenv("ENVTRACE_LOGFILE");
-        if(!logfile_name) {
-            fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
-            exit(1);
-        }
-    }
-
-    if(!logfile) {
-        logfile = fopen(logfile_name,"a");
-        if(!logfile) {
-            fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
-            exit(1);
-        }
-    }
+    logfile_check();
 
     int result = real_execvpe(file,argv,envp);
     pid_t pid = getpid();
     pid_t ppid = getppid();
     struct timespec timestamp;
     clock_gettime(CLOCK_REALTIME,&timestamp);
-    char *user = getenv("USER");
+    char *user = real_getenv("USER");
     char *hostname = malloc(sizeof(INT_MAX));
     size_t hostsize = INT_MAX;
     gethostname(hostname,hostsize);
