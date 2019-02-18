@@ -25,6 +25,8 @@ static int (*real_clone) ( int (*fn)(void *),void *child_stack,int flags,void *a
 static int (*real_open) ( const char *pathname,int flags,... ) = 0;
 static int (*real_openat) ( int dirfd, const char *pathname, int flags,... ) = 0;
 static int (*real_creat) ( const char *pathname,mode_t mode ) = 0;
+static FILE * (*real_fopen) ( const char *path,const char *mode ) = 0;
+static FILE * (*real_freopen) ( const char *path,const char *mode,FILE *stream ) = 0;
 static int (*real_execv) ( const char *path,char *const argv[] ) = 0;
 static int (*real_execl) ( const char *path,const char *arg0,... ) = 0;
 static int (*real_execve) ( const char *path,char *const argv[],char *const envp[] ) = 0;
@@ -35,8 +37,16 @@ static int (*real_execvpe) ( const char *file,char *const argv[],char *const env
 
 void logfile_check()
 {
+
  	if(!logfile_name) {
-		logfile_name = real_getenv("ENVTRACE_LOGFILE");
+		if(!real_getenv) {
+		    real_getenv = dlsym(RTLD_NEXT,"getenv");
+		    if(!real_getenv) {
+			    fprintf(stderr,"envtrace-helper: couldn't find original getenv().\n");
+			    exit(1);
+		    }
+	    }
+        logfile_name = real_getenv("ENVTRACE_LOGFILE");
 		if(!logfile_name) {
 			fprintf(stderr,"envtrace-helper: ENVTRACE_LOGFILE is not set.\n");
 			exit(1);
@@ -44,7 +54,14 @@ void logfile_check()
 	}
 
     if(!logfile) {
-        logfile = fopen(logfile_name,"a");
+        if(!real_fopen) {
+		    real_fopen = dlsym(RTLD_NEXT,"fopen");
+		    if(!real_fopen) {
+			    fprintf(stderr,"envtrace-helper: couldn't find original fopen().\n");
+			    exit(1);
+		    }
+	    }
+        logfile = real_fopen(logfile_name,"a");
         if(!logfile) {
             fprintf(stderr,"envtrace-helper: couldn't open %s for logging: %s\n",(char *)logfile,strerror(errno));
             exit(1);
@@ -297,6 +314,62 @@ int creat( const char *pathname,mode_t mode )
     fflush(logfile);
     
     return result;
+}
+
+FILE *fopen( const char *path,const char *mode )
+{
+	if(!real_fopen) {
+		real_fopen = dlsym(RTLD_NEXT,"fopen");
+		if(!real_fopen) {
+			fprintf(stderr,"envtrace-helper: couldn't find original fopen().\n");
+			exit(1);
+		}
+	}
+
+    logfile_check();
+
+	FILE *result = real_fopen(path,mode);
+	pid_t pid = getpid();
+	pid_t ppid = getppid();
+	struct timespec timestamp;
+	clock_gettime(CLOCK_REALTIME,&timestamp);
+	char *user = real_getenv("USER");
+	char *hostname = malloc(sizeof(INT_MAX));
+	size_t hostsize = INT_MAX;
+	gethostname(hostname,hostsize);
+
+	fprintf(logfile,"%s@%s %ld.%ld: FOPEN %ld %ld %s %s %p\n",user,hostname,(long)timestamp.tv_sec,timestamp.tv_nsec,(long)ppid,(long)pid,program_invocation_name,path,result);
+	fflush(logfile);
+
+	return result;
+}
+
+FILE *freopen ( const char *path,const char *mode,FILE *stream )
+{
+	if(!real_freopen) {
+		real_freopen = dlsym(RTLD_NEXT,"freopen");
+		if(!real_freopen) {
+			fprintf(stderr,"envtrace-helper: couldn't find original freopen().\n");
+			exit(1);
+		}
+	}
+
+    logfile_check();
+
+	FILE *result = real_freopen(path,mode,stream);
+	pid_t pid = getpid();
+	pid_t ppid = getppid();
+	struct timespec timestamp;
+	clock_gettime(CLOCK_REALTIME,&timestamp);
+	char *user = real_getenv("USER");
+	char *hostname = malloc(sizeof(INT_MAX));
+	size_t hostsize = INT_MAX;
+	gethostname(hostname,hostsize);
+
+	fprintf(logfile,"%s@%s %ld.%ld: FREOPEN %ld %ld %s %s %p\n",user,hostname,(long)timestamp.tv_sec,timestamp.tv_nsec,(long)ppid,(long)pid,program_invocation_name,path,result);
+	fflush(logfile);
+
+	return result;
 }
 
 int execv ( const char *path,char *const argv[] )
